@@ -1,0 +1,61 @@
+name: Quant Value Screener Engine
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow every weekday at exactly 5:00 PM EST (22:00 UTC)
+  schedule:
+    - cron: '0 22 * * 1-5'
+  
+  # Allows you to run this workflow manually from the Actions tab on GitHub!
+  workflow_dispatch:
+
+jobs:
+  run-screener:
+    runs-on: ubuntu-latest
+
+    # Grants Github Actions permissions to commit the generated code back to your repository
+    permissions:
+      contents: write
+
+    steps:
+      # Step 1: Download your repository onto the cloud machine
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Install Python environment
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip' # Automatically caches dependencies to make it ultra-fast
+
+      # Step 3: Install all your Quantitative Analysis PIP packages
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Step 4: Run the identical backend calculation Python script!
+      - name: Run Backend Quant Analysis
+        run: |
+          echo "Firing Main Python Backend Engine..."
+          python src/main.py
+
+      # Step 5: Copy the generated CSV payload over to the Next.js Frontend payload
+      - name: Deploy Payload to Frontend Directory
+        run: |
+          # Finds the newest CSV and forces it into the frontend directory
+          LATEST_CSV=$(ls -t outputs/us_stocks_*.csv | head -1)
+          cp "$LATEST_CSV" frontend/public/data/latest_screener.csv
+          
+      # Step 6: Git Add & Git Commit the newly generated data files
+      - name: Commit Updated Dashboard Data
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          # We only commit the exact public CSV payload, nothing else!
+          git add frontend/public/data/latest_screener.csv 
+          git add outputs/
+          # Ensure it doesn't fail if there are no changes on holidays/weekends
+          git commit -m "Automated CI: Daily Quant Matrix Data Refresh" || echo "No changes to commit"
+          git push

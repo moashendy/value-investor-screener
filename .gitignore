@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.env
+
+# Next.js / Node
+node_modules/
+.next/
+out/
+build/
+.vercel
+*.log
+
+# Caching Data
+data/*_finance.json
+outputs/*.csv
+outputs/*.txt
+
+# Operating System
+.DS_Store
+Thumbs.db
