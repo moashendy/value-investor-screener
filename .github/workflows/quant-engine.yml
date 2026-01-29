@@ -2,9 +2,9 @@ name: Quant Value Screener Engine
 
 # Controls when the workflow will run
 on:
-  # Triggers the workflow every weekday at exactly 5:00 PM EST (22:00 UTC)
+  # Triggers the workflow every weekday at exactly 9:30 AM EST (14:30 UTC)
   schedule:
-    - cron: '0 22 * * 1-5'
+    - cron: '30 14 * * 1-5'
   
   # Allows you to run this workflow manually from the Actions tab on GitHub!
   workflow_dispatch:

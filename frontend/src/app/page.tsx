@@ -55,7 +55,7 @@ export default function DashboardPage() {
             <span className="flex items-center text-emerald-500">
               CRON AUTOMATION ACTIVE <span className="ml-2 animate-pulse text-lg leading-none">●</span>
             </span>
-            <span className="mt-1 opacity-60">Syncs Daily @ 17:00 EST</span>
+            <span className="mt-1 opacity-60">Syncs Daily @ 09:30 EST</span>
           </div>
         </header>
 
