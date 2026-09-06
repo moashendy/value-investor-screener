@@ -229,6 +229,27 @@ class ValuationEligibilityTests(unittest.TestCase):
         self.assertFalse(result.is_valid())
         self.assertIn(ReasonCode.STALE_FUNDAMENTALS.value, result.reason_codes)
 
+    def test_historical_valuation_uses_signal_date_for_fundamental_age(self):
+        result = self.value(
+            valuation_as_of="2020-04-01",
+            data_as_of={
+                "retrieved_at": "2026-01-01T00:00:00+00:00",
+                "balance_sheet": "2019-12-31",
+            },
+        )
+        self.assertTrue(result.is_valid())
+
+    def test_future_statement_period_stops_historical_valuation(self):
+        result = self.value(
+            valuation_as_of="2020-01-01",
+            data_as_of={
+                "retrieved_at": "2026-01-01T00:00:00+00:00",
+                "balance_sheet": "2020-03-31",
+            },
+        )
+        self.assertFalse(result.is_valid())
+        self.assertIn(ReasonCode.STALE_FUNDAMENTALS.value, result.reason_codes)
+
     def test_missing_source_identity_stops_eligibility(self):
         result = self.value(source_identity={})
         self.assertFalse(result.is_valid())

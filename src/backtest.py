@@ -87,8 +87,8 @@ def prepare_signals(signals: pd.DataFrame) -> pd.DataFrame:
     frame["fundamentals_available_date"] = pd.to_datetime(
         frame["fundamentals_available_date"], errors="coerce"
     ).dt.normalize()
-    if frame[["signal_date", "fundamentals_available_date"]].isna().any().any():
-        raise BacktestIntegrityError("signal dates and fundamentals availability dates must be valid")
+    if frame["signal_date"].isna().any():
+        raise BacktestIntegrityError("signal dates must be valid")
 
     frame["ticker"] = frame["ticker"].astype(str).str.strip().str.upper()
     if (frame["ticker"] == "").any():
@@ -101,13 +101,17 @@ def prepare_signals(signals: pd.DataFrame) -> pd.DataFrame:
     for column in ("current_price", "intrinsic_value"):
         frame[column] = pd.to_numeric(frame[column], errors="coerce")
 
-    future_fundamentals = frame["fundamentals_available_date"] > frame["signal_date"]
+    candidates = frame["eligible"] & frame["universe_member"]
+    if frame.loc[candidates, "fundamentals_available_date"].isna().any():
+        raise BacktestIntegrityError("eligible members require valid fundamentals availability dates")
+    future_fundamentals = candidates & (
+        frame["fundamentals_available_date"] > frame["signal_date"]
+    )
     if future_fundamentals.any():
         examples = frame.loc[future_fundamentals, ["signal_date", "ticker"]].head(5)
         labels = ", ".join(f"{row.ticker}@{row.signal_date.date()}" for row in examples.itertuples())
         raise BacktestIntegrityError(f"look-ahead detected: fundamentals were not public for {labels}")
 
-    candidates = frame["eligible"] & frame["universe_member"]
     invalid_values = candidates & (
         ~np.isfinite(frame["current_price"])
         | ~np.isfinite(frame["intrinsic_value"])

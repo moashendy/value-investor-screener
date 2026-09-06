@@ -247,7 +247,7 @@ class GrahamValuator:
         return 'generic'
 
     @staticmethod
-    def fundamentals_age_days(data_as_of: Dict) -> Optional[int]:
+    def fundamentals_age_days(data_as_of: Dict, reference_date=None) -> Optional[int]:
         raw = (data_as_of or {}).get('balance_sheet')
         if not raw:
             return None
@@ -255,7 +255,13 @@ class GrahamValuator:
             point = datetime.fromisoformat(str(raw).replace('Z', '+00:00'))
             if point.tzinfo is None:
                 point = point.replace(tzinfo=timezone.utc)
-            return max(0, (datetime.now(timezone.utc) - point).days)
+            if reference_date is None:
+                reference = datetime.now(timezone.utc)
+            else:
+                reference = datetime.fromisoformat(str(reference_date).replace('Z', '+00:00'))
+                if reference.tzinfo is None:
+                    reference = reference.replace(tzinfo=timezone.utc)
+            return (reference - point).days
         except (TypeError, ValueError):
             return None
     
@@ -480,8 +486,10 @@ class GrahamValuator:
             detail = corporate_action_flags[0] if corporate_action_flags else "corporate action detected"
             exclude(ReasonCode.INCOMPARABLE_HISTORY, f"Historical statements are not comparable ({detail})")
 
-        fundamentals_age = self.fundamentals_age_days(data_as_of)
-        if fundamentals_age is None or fundamentals_age > MAX_FUNDAMENTAL_AGE_DAYS:
+        fundamentals_age = self.fundamentals_age_days(
+            data_as_of, financial_data.get('valuation_as_of')
+        )
+        if fundamentals_age is None or fundamentals_age < 0 or fundamentals_age > MAX_FUNDAMENTAL_AGE_DAYS:
             label = "missing" if fundamentals_age is None else f"{fundamentals_age} days old"
             exclude(ReasonCode.STALE_FUNDAMENTALS, f"Latest balance-sheet period is {label}")
 

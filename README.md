@@ -293,6 +293,21 @@ intra-period drawdown require a separate daily mark-to-market equity curve and
 are intentionally not inferred from sparse snapshots. No historical performance
 is claimed until a survivorship-bias-free, filing-date-aware dataset is supplied.
 
+SEC Company Facts can be converted into valuation snapshots after obtaining a
+historical membership file and adjusted-price history:
+
+```bash
+export SEC_USER_AGENT="Your Name or Organization your-email@example.com"
+python src/historical_signals.py \
+  --membership path/to/historical_membership.csv \
+  --prices path/to/adjusted_prices.csv \
+  --output data/historical_signals.csv
+```
+
+The downloader caches responses, stays below the SEC's published request ceiling,
+uses stable CIK identifiers, and excludes facts filed after each signal date.
+See `docs/HISTORICAL_DATA.md` for the data contract and known coverage limits.
+
 ### Adding Your Own Stocks
 Edit `data_fetcher.py` and add tickers to the lists:
 

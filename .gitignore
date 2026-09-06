@@ -15,8 +15,10 @@ build/
 # Caching Data
 data/*_finance.json
 data/universes/sec_company_tickers.json
+data/companyfacts/
 outputs/*.csv
 outputs/*.txt
+outputs/backtest/
 
 # Generated research and rendering artifacts
 output/
