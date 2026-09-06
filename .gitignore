@@ -14,8 +14,13 @@ build/
 
 # Caching Data
 data/*_finance.json
+data/universes/sec_company_tickers.json
 outputs/*.csv
 outputs/*.txt
+
+# Generated research and rendering artifacts
+output/
+tmp/
 
 # Operating System
 .DS_Store

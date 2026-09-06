@@ -48,14 +48,13 @@ jobs:
           LATEST_CSV=$(ls -t outputs/us_stocks_*.csv | head -1)
           cp "$LATEST_CSV" frontend/public/data/latest_screener.csv
           
-      # Step 6: Git Add & Git Commit the newly generated data files
+      # Step 6: Commit only the validated public payload. Timestamped outputs
+      # remain ignored build artifacts and must not make this step fail.
       - name: Commit Updated Dashboard Data
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          # We only commit the exact public CSV payload, nothing else!
-          git add frontend/public/data/latest_screener.csv 
-          git add outputs/
+          git add frontend/public/data/latest_screener.csv
           # Ensure it doesn't fail if there are no changes on holidays/weekends
           git commit -m "Automated CI: Daily Quant Matrix Data Refresh" || echo "No changes to commit"
           git push

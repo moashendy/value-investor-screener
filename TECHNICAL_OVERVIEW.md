@@ -37,23 +37,32 @@
 2. Data Fetching (data_fetcher.py)
    ├─ Current prices
    ├─ Annual financials (5 years)
-   ├─ Quarterly financials
-   └─ Balance sheet data
+   ├─ Latest annual/quarterly statement selection
+   ├─ Corporate-action and unusual-item evidence
+   ├─ Tangible book/equity-to-assets inputs for financial companies
+   ├─ Nareit-style FFO proxy and debt/EBITDA for REITs
+   └─ Provider, issuer identity and as-of provenance
 
 3. Normalization (valuations.py)
-   ├─ 5-year average EPS
-   ├─ 5-year average FCF
+   ├─ Quality-adjusted EPS (period share count; upside spikes removed)
+   ├─ Sector-policy FCF normalization
+   ├─ Lower-quartile REIT FFO normalization
    └─ Quality metric calculation
 
 4. Quality Filters (valuations.py)
-   ├─ Positive normalized FCF
-   ├─ Interest coverage ≥ 3x
-   └─ Debt/Equity ≤ 2.0
+   ├─ Generic companies: positive FCF, coverage ≥ 3x, D/E ≤ 2.0
+   ├─ Banks/insurers: tangible book and common equity/assets ≥ 4%
+   ├─ REITs: FFO history and debt/EBITDA ≤ 7x
+   ├─ Fundamentals no older than 190 days
+   ├─ Comparable history (no detected discontinued operations)
+   └─ Complete data provenance
 
 5. Valuation Methods (valuations.py)
    ├─ Earnings Power Value (EPV)
    ├─ Conservative Multiple
-   └─ Conservative DCF (if stable FCF)
+   ├─ Conservative DCF (generic companies with stable FCF)
+   ├─ Tangible-book/earnings cross-check (banks and insurers)
+   └─ Haircut FFO multiple (REITs)
 
 6. Conservative Selection (valuations.py)
    └─ Intrinsic Value = min(EPV, Multiple, DCF)
@@ -63,7 +72,8 @@
 
 8. Ranking & Output (screener.py)
    ├─ Sort by MoS
-   ├─ Generate tables
+   ├─ Generate opportunity and watchlist tables
+   ├─ Calculate 20%-MoS research entry prices and alert states
    └─ Create reports
 ```
 
@@ -97,7 +107,7 @@
 
 **Formula**: `Value = Normalized EPS × Fair PE`
 
-**Fair PE Selection**: `min(10, Historical PE, Sector PE)`
+**Fair PE Selection**: `min(sector policy cap, current PE, optional supplied sector PE)`
 
 **Philosophy**:
 - Graham suggested P/E of 10 as conservative
@@ -124,10 +134,11 @@
 **Formula**: Present value of future free cash flows
 
 **Parameters**:
-- Growth rate: Capped at 3% (GDP-like growth)
-- Discount rate: 9%
+- Growth rate: Sector-aware cap from 0% to 3%
+- Discount rate: Sector-aware floor from 9% to 11%
 - Growth period: 5 years, then perpetuity
-- Stability requirement: CV < 30%
+- Stability requirement: Sector-aware CV cap up to 30%
+- Basis: FCFE proxy (operating cash flow less capital expenditure)
 
 **Philosophy**:
 - Only use when FCF is predictable
@@ -292,6 +303,10 @@ us_stocks_YYYYMMDD_HHMMSS.csv
 us_opportunities_YYYYMMDD_HHMMSS.csv
 ├─ Only stocks with MoS > 20%
 └─ Ready for detailed research
+
+us_watchlist_YYYYMMDD_HHMMSS.csv
+├─ Top eligible names, even when no stock clears 20% MoS
+└─ Includes entry price, alert state, sector model and required filing checks
 ```
 
 ### Text Report

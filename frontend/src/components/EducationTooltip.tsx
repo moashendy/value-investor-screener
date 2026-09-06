@@ -38,13 +38,13 @@ export function EducationTooltip({
 }
 
 export const Definitions = {
-  mos: "How much cheaper the stock price is compared to its true Intrinsic Value. Buy when high.",
-  intrinsicValue: "The true mathematical worth of the company based on its cash flows, totally ignoring market hype.",
+  mos: "Estimated discount to conservative intrinsic value. A positive result is a research signal, not an automatic buy.",
+  intrinsicValue: "A conservative model estimate based on normalized fundamentals. It is uncertain and must be checked against filings.",
   fScore: "A 9-point checklist of financial momentum. 9 is perfect. < 5 is a failing grade (a 'value trap').",
   zScore: "Predicts bankruptcy risk. > 2.99 is Safe. < 1.81 means high risk of distress.",
   roic: "Return on Invested Capital. Measures business quality. Shows how much profit the company generates for every dollar sunk into assets.",
   evFcf: "Enterprise Value to Free Cash Flow. How much cash yield you get for buying the entire company, including its debt.",
   wacc: "Weighted Average Cost of Capital. The dynamic discount rate used to value the company based on its true market risk (Beta).",
   totalScreened: "The total amount of equities successfully parsed and valued in this backend run.",
-  topOpp: "The highest ranking opportunity calculated by multiplying the basic Proxy MoS by the ROIC."
+  topOpp: "Stocks at or below the research entry price, which is set 20% below estimated intrinsic value."
 };

@@ -1,56 +1,61 @@
 import { StockData } from "@/lib/data-parser";
-import { TrendingUp, BarChart3, Target, Calculator } from "lucide-react";
+import type { ReactNode } from "react";
+import { BarChart3, Target, ShieldAlert, Gauge } from "lucide-react";
 import { EducationTooltip, Definitions } from "./EducationTooltip";
 
 export function HeroStats({ data }: { data: StockData[] }) {
   if (!data || data.length === 0) return null;
 
-  const totalAnalyzed = data.length;
-  
-  const validForOpp = data.filter(d => d["Margin of Safety"] !== null && d.ROIC !== null);
-  const topOpp = [...validForOpp].sort((a, b) => {
-    const aScore = (a["Margin of Safety"] as number) * (a.ROIC as number);
-    const bScore = (b["Margin of Safety"] as number) * (b.ROIC as number);
-    return bScore - aScore;
-  })[0];
-
-  const overvaluedCount = data.filter(d => (d["Margin of Safety"] || 0) < 0).length;
-
-  const avgRoic = data.reduce((acc, curr) => acc + (curr.ROIC || 0), 0) / (totalAnalyzed || 1);
+  const buyZones = data.filter(d => d["Alert Status"].startsWith("BUY-ZONE"));
+  const closest = [...data]
+    .filter(d => d["Price Premium to Entry"] !== null)
+    .sort((a, b) => (a["Price Premium to Entry"] as number) - (b["Price Premium to Entry"] as number))[0];
+  const specialized = data.filter(d => d["Verification Required"].length > 0).length;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
       <StatCard 
         title="Total Screened"
-        value={totalAnalyzed.toString()}
+        value={data.length.toString()}
         icon={<BarChart3 className="w-5 h-5 text-slate-400" />}
         tooltipContent={Definitions.totalScreened}
       />
       <StatCard 
-        title="Top Opportunity"
-        value={topOpp ? topOpp.Ticker : "N/A"}
-        subtitle={topOpp ? `${topOpp.Company}` : undefined}
+        title="Buy Zones"
+        value={buyZones.length.toString()}
+        subtitle={buyZones.length ? "Requires filing verification" : "No qualifying entry today"}
         icon={<Target className="w-5 h-5 text-emerald-400" />}
         valueClass="text-emerald-400"
         tooltipContent={Definitions.topOpp}
       />
       <StatCard 
-        title="Overvalued Targets"
-        value={overvaluedCount.toString()}
-        icon={<TrendingUp className="w-5 h-5 text-rose-400" />}
-        valueClass="text-rose-400"
+        title="Closest to Entry"
+        value={closest ? closest.Ticker : "N/A"}
+        subtitle={closest?.["Price Premium to Entry"] !== null ? `${closest["Price Premium to Entry"]?.toFixed(1)}% above entry` : undefined}
+        icon={<Gauge className="w-5 h-5 text-amber-400" />}
+        valueClass="text-amber-400"
       />
       <StatCard 
-        title="Avg ROIC (Universe)"
-        value={`${avgRoic.toFixed(1)}%`}
-        icon={<Calculator className="w-5 h-5 text-amber-400" />}
-        tooltipContent={Definitions.roic}
+        title="Specialized Models"
+        value={specialized.toString()}
+        subtitle="Manual filing checks required"
+        icon={<ShieldAlert className="w-5 h-5 text-blue-400" />}
+        valueClass="text-blue-400"
       />
     </div>
   );
 }
 
-function StatCard({ title, value, subtitle, icon, valueClass = "text-slate-50", tooltipContent }: any) {
+interface StatCardProps {
+  title: string;
+  value: string;
+  subtitle?: string;
+  icon: ReactNode;
+  valueClass?: string;
+  tooltipContent?: string;
+}
+
+function StatCard({ title, value, subtitle, icon, valueClass = "text-slate-50", tooltipContent }: StatCardProps) {
   return (
     <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-5 flex flex-col justify-between backdrop-blur-md shadow-[0_4px_20px_-4px_rgba(0,0,0,0.5)]">
       <div className="flex items-center justify-between mb-3">

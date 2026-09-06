@@ -7,8 +7,14 @@ import pandas as pd
 from typing import List, Dict
 from datetime import datetime
 import os
+import math
 
-from valuations import ValuationResult
+from config import MIN_RUN_PRICE_COVERAGE
+from valuations import ValuationResult, is_finite_number
+
+
+class RunIntegrityError(RuntimeError):
+    """Raised when a provider/data failure makes a run unsafe to publish."""
 
 
 class ValueScreener:
@@ -17,9 +23,37 @@ class ValueScreener:
     Tracks changes in price vs intrinsic value
     """
     
-    def __init__(self, output_dir: str = "outputs"):
+    def __init__(self, output_dir: str = "outputs", min_price_coverage: float = MIN_RUN_PRICE_COVERAGE):
         self.output_dir = output_dir
+        self.min_price_coverage = min_price_coverage
         os.makedirs(output_dir, exist_ok=True)
+
+    def validate_run_integrity(self, us_valuations: List[ValuationResult], ca_valuations: List[ValuationResult]) -> None:
+        """Abort publication when a market run is incomplete or internally inconsistent."""
+        failures = []
+        for market, valuations in (("US", us_valuations), ("Canadian", ca_valuations)):
+            if not valuations:
+                failures.append(f"{market}: no valuation records returned")
+                continue
+
+            tickers = [v.ticker for v in valuations]
+            if len(tickers) != len(set(tickers)):
+                failures.append(f"{market}: duplicate ticker records detected")
+
+            priced = sum(is_finite_number(v.current_price, positive=True) for v in valuations)
+            coverage = priced / len(valuations)
+            if coverage < self.min_price_coverage:
+                failures.append(
+                    f"{market}: finite positive price coverage {coverage:.1%} "
+                    f"is below required {self.min_price_coverage:.1%} ({priced}/{len(valuations)})"
+                )
+
+            inconsistent = [v.ticker for v in valuations if v.eligible and not v.is_valid()]
+            if inconsistent:
+                failures.append(f"{market}: eligible rows have invalid required values: {', '.join(inconsistent[:10])}")
+
+        if failures:
+            raise RunIntegrityError("Run integrity check failed; no outputs were published. " + " | ".join(failures))
     
     def rank_stocks(self, valuations: List[ValuationResult]) -> pd.DataFrame:
         valid_valuations = [v for v in valuations if v.is_valid()]
@@ -29,6 +63,13 @@ class ValueScreener:
         
         records = []
         for val in valid_valuations:
+            entry_price = val.intrinsic_value * 0.80
+            if val.current_price <= entry_price:
+                alert_status = 'BUY-ZONE: verify filings'
+            elif val.current_price <= entry_price * 1.10:
+                alert_status = 'NEAR: within 10% of entry'
+            else:
+                alert_status = 'WAIT'
             records.append({
                 'Ticker': val.ticker,
                 'Company': val.company_name,
@@ -38,6 +79,9 @@ class ValueScreener:
                 'Margin of Safety': val.margin_of_safety,
                 'MoS %': f"{val.margin_of_safety * 100:.1f}%",
                 'MoS Band': val.get_mos_band(),
+                'Research Entry Price (20% MoS)': entry_price,
+                'Price Premium to Entry': (val.current_price - entry_price) / entry_price,
+                'Alert Status': alert_status,
                 'Piotroski F-Score': val.f_score if val.f_score is not None else 'N/A',
                 'Altman Z-Score': f"{val.altman_z_score:.2f}" if val.altman_z_score is not None else 'N/A',
                 'WACC': f"{val.wacc * 100:.1f}%" if val.wacc is not None else 'N/A',
@@ -47,9 +91,23 @@ class ValueScreener:
                 'EPV Value': val.epv_value,
                 'Multiple Value': val.multiple_value,
                 'DCF Value': val.dcf_value if val.dcf_value else 'N/A',
-                'Interest Coverage': f"{val.interest_coverage:.1f}x" if val.interest_coverage else 'N/A',
-                'Debt/Equity': f"{val.debt_to_equity:.2f}" if val.debt_to_equity else 'N/A',
-                'Years of Data': val.years_of_data
+                'Interest Coverage': (
+                    'No interest expense' if val.interest_coverage is not None and math.isinf(val.interest_coverage)
+                    else f"{val.interest_coverage:.1f}x" if val.interest_coverage is not None else 'N/A'
+                ),
+                'Debt/Equity': f"{val.debt_to_equity:.2f}" if val.debt_to_equity is not None else 'N/A',
+                'Years of Data': val.years_of_data,
+                'Fundamentals As Of': val.data_as_of.get('balance_sheet', 'N/A'),
+                'Data Provider': val.source_identity.get('provider', 'N/A'),
+                'Issuer Identity': val.source_identity.get('identity_key', 'N/A'),
+                'Source Symbol': val.source_identity.get('symbol', 'N/A'),
+                'Source URL': val.source_identity.get('source_url', 'N/A'),
+                'Earnings Quality Flags': '; '.join(val.earnings_quality_flags),
+                'Valuation Policy': val.valuation_policy,
+                'DCF Basis': val.dcf_basis,
+                'Sector Model': val.sector_model,
+                'Normalized FFO Proxy': val.normalized_ffo if val.normalized_ffo is not None else 'N/A',
+                'Verification Required': val.verification_required,
             })
         
         df = pd.DataFrame(records)
@@ -62,7 +120,9 @@ class ValueScreener:
         
         tables = {
             'us_stocks': us_df,
-            'canadian_stocks': ca_df
+            'canadian_stocks': ca_df,
+            'us_watchlist': us_df.head(20).copy(),
+            'ca_watchlist': ca_df.head(10).copy(),
         }
         
         if not us_df.empty: tables['us_opportunities'] = us_df[us_df['Margin of Safety'] > 0.20].copy()
@@ -108,10 +168,22 @@ class ValueScreener:
                 'Company': val.company_name,
                 'Sector': val.sector,
                 'Reasons Excluded': '; '.join(val.reasons_excluded),
+                'Reason Codes': ';'.join(val.reason_codes),
+                'Data Valid': val.data_valid,
+                'Valuation Available': val.valuation_available,
+                'Eligible': val.eligible,
                 'Current Price': val.current_price,
                 'F-Score': val.f_score if val.f_score is not None else 'N/A',
                 'Altman Z-Score': f"{val.altman_z_score:.2f}" if val.altman_z_score is not None else 'N/A',
-                'Normalized EPS': val.normalized_eps if val.normalized_eps else 'N/A'
+                'Normalized EPS': val.normalized_eps if val.normalized_eps else 'N/A',
+                'Fundamentals As Of': val.data_as_of.get('balance_sheet', 'N/A'),
+                'Data Provider': val.source_identity.get('provider', 'N/A'),
+                'Issuer Identity': val.source_identity.get('identity_key', 'N/A'),
+                'Source Symbol': val.source_identity.get('symbol', 'N/A'),
+                'Source URL': val.source_identity.get('source_url', 'N/A'),
+                'Corporate Action Flags': '; '.join(val.corporate_action_flags),
+                'Earnings Quality Flags': '; '.join(val.earnings_quality_flags),
+                'Valuation Policy': val.valuation_policy,
             })
         
         return pd.DataFrame(records)
@@ -123,10 +195,11 @@ class ValueScreener:
         epv_str = f"${val.epv_value:.2f}" if val.epv_value is not None else "N/A"
         multiple_str = f"${val.multiple_value:.2f}" if val.multiple_value is not None else "N/A"
         eps_str = f"${val.normalized_eps:.2f}" if val.normalized_eps is not None else "N/A"
-        ic_str = f"{val.interest_coverage:.1f}x" if val.interest_coverage is not None else "N/A (No interest exp)"
-        de_str = f"{val.debt_to_equity:.2f}" if val.debt_to_equity is not None else "N/A (No debt)"
-        
-        de_str = f"{val.debt_to_equity:.2f}" if val.debt_to_equity is not None else "N/A (No debt)"
+        if val.interest_coverage is not None and math.isinf(val.interest_coverage):
+            ic_str = "No interest expense (positive operating income)"
+        else:
+            ic_str = f"{val.interest_coverage:.1f}x" if val.interest_coverage is not None else "N/A (missing/not meaningful)"
+        de_str = f"{val.debt_to_equity:.2f}" if val.debt_to_equity is not None else "N/A (missing/not meaningful)"
         
         f_score_str = f"{val.f_score}/9" if val.f_score is not None else "N/A"
         altman_str = f"{val.altman_z_score:.2f}" if val.altman_z_score is not None else "N/A"
@@ -169,6 +242,11 @@ INTRINSIC VALUE = ${val.intrinsic_value:.2f}
 QUALITY METRICS:
 - Interest Coverage: {ic_str} (minimum 3.0x required)
 - Debt/Equity: {de_str} (maximum 2.0 required)
+- Fundamentals As Of: {val.data_as_of.get('balance_sheet', 'N/A')}
+- Data Source: {val.source_identity.get('provider', 'N/A')} / {val.source_identity.get('identity_key', 'N/A')}
+- Earnings Quality Flags: {'; '.join(val.earnings_quality_flags) if val.earnings_quality_flags else 'None detected'}
+- Valuation Policy: {val.valuation_policy}
+- DCF Basis: {val.dcf_basis}
 
 """
         
@@ -183,6 +261,7 @@ QUALITY METRICS:
         return explanation
     
     def save_results(self, tables: Dict[str, pd.DataFrame], us_valuations: List[ValuationResult], ca_valuations: List[ValuationResult], timestamp: str = None):
+        self.validate_run_integrity(us_valuations, ca_valuations)
         if timestamp is None: timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         for name, df in tables.items():
             if not df.empty:
@@ -231,7 +310,7 @@ QUALITY METRICS:
         all_valid = [v for v in all_valuations if v.is_valid()]
         all_valid.sort(key=lambda v: v.margin_of_safety, reverse=True)
         if all_valid:
-            report_lines.extend(["", "", "DETAILED ANALYSIS - TOP 5 OPPORTUNITIES", "=" * 70])
+            report_lines.extend(["", "", "DETAILED ANALYSIS - TOP 5 ELIGIBLE WATCHLIST NAMES", "=" * 70])
             for val in all_valid[:5]: report_lines.append(self.generate_stock_explanation(val))
         
         report_filepath = os.path.join(self.output_dir, f"value_report_{timestamp}.txt")

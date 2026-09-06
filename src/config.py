@@ -14,6 +14,14 @@ MAX_DEBT_TO_EQUITY = 2.0  # Conservative leverage limit
 # Data parameters
 YEARS_FOR_NORMALIZATION = 5  # Years to average for normalized metrics
 MIN_YEARS_REQUIRED = 3  # Minimum years of data to include stock
+FINANCIAL_DATA_SCHEMA_VERSION = 4
+MAX_FUNDAMENTAL_AGE_DAYS = 190  # Require at least a recent quarterly balance sheet
+EARNINGS_OUTLIER_MULTIPLE = 3.0  # Remove isolated upside spikes from normalized EPS
+UNUSUAL_ITEM_MATERIALITY = 0.20  # Flag unusual items above 20% of net income
+
+# Run-integrity gates. A failed gate aborts publication of all outputs so a
+# provider outage cannot silently become a stock ranking.
+MIN_RUN_PRICE_COVERAGE = 0.95
 
 # Margin of Safety bands
 MOS_BANDS = [

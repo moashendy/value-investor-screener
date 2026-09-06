@@ -9,6 +9,7 @@ import { SectorBarChart } from "@/components/SectorBarChart";
 export default function DashboardPage() {
   const [data, setData] = useState<StockData[]>([]);
   const [loading, setLoading] = useState(true);
+  const buyZoneCount = data.filter((row) => row["Alert Status"].startsWith("BUY-ZONE")).length;
 
   const loadData = useCallback(() => {
     fetchData().then((res) => {
@@ -48,18 +49,24 @@ export default function DashboardPage() {
             <p className="text-slate-500 text-xs mt-2 uppercase tracking-widest font-mono flex items-center">
               <span>System: Active</span>
               <span className="mx-2 text-slate-700">|</span> 
-              <span>Data Target: latest_screener.csv</span>
+              <span>Research screen · not investment advice</span>
             </p>
           </div>
           <div className="text-right mt-4 md:mt-0 font-mono text-xs text-slate-500 flex flex-col items-end">
-            <span className="flex items-center text-emerald-500">
-              CRON AUTOMATION ACTIVE <span className="ml-2 animate-pulse text-lg leading-none">●</span>
+            <span className="flex items-center text-blue-400">
+              VALIDATED SNAPSHOT <span className="ml-2 text-lg leading-none">●</span>
             </span>
-            <span className="mt-1 opacity-60">Syncs Daily @ 09:30 EST</span>
+            <span className="mt-1 opacity-60">Refresh status is controlled by deployment</span>
           </div>
         </header>
 
         <HeroStats data={data} />
+
+        <div className={`rounded-xl border px-4 py-3 text-sm ${buyZoneCount > 0 ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200" : "border-amber-500/30 bg-amber-500/10 text-amber-100"}`}>
+          {buyZoneCount > 0
+            ? `${buyZoneCount} name${buyZoneCount === 1 ? "" : "s"} reached the research entry zone. Verify the latest filings before acting.`
+            : "No company currently meets the required 20% margin of safety. The table is a watchlist, not a buy list."}
+        </div>
         
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 w-full">
           <MagicQuadrant data={data} />

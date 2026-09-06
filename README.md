@@ -25,6 +25,9 @@ This tool embodies Benjamin Graham's core principles:
    - Negative free cash flow
    - Interest coverage < 3x
    - Excessive leverage (D/E > 2.0)
+   - Stale balance-sheet data (>190 days)
+   - Detected discontinued operations or non-comparable history
+   - Missing provider, issuer identity, or as-of provenance
 
 4. **Ranks by margin of safety**:
    - MoS = (Intrinsic Value - Market Price) / Intrinsic Value
@@ -75,6 +78,8 @@ All results are saved to the `outputs/` directory:
 - `canadian_stocks_YYYYMMDD_HHMMSS.csv` - All Canadian stocks ranked by MoS
 - `us_opportunities_YYYYMMDD_HHMMSS.csv` - US stocks with MoS > 20%
 - `ca_opportunities_YYYYMMDD_HHMMSS.csv` - Canadian stocks with MoS > 20%
+- `us_watchlist_YYYYMMDD_HHMMSS.csv` - Top 20 eligible US names with research entry prices and alerts
+- `ca_watchlist_YYYYMMDD_HHMMSS.csv` - Top 10 eligible Canadian names with research entry prices and alerts
 - `sector_summary_YYYYMMDD_HHMMSS.csv` - Sector-level statistics
 - `excluded_stocks_YYYYMMDD_HHMMSS.csv` - Stocks filtered out with reasons
 
@@ -98,16 +103,47 @@ Assumes current earnings persist indefinitely with no growth. Very conservative.
 **2. Conservative Multiple Valuation**
 ```
 Value = Normalized EPS × Fair PE
-Fair PE = min(10, Historical PE, Sector PE)
+Fair PE = min(Sector policy cap, Current PE, optional precomputed Sector PE)
 ```
 Uses the most conservative P/E ratio available.
 
 **3. Conservative DCF**
 ```
 Only used if FCF is stable (CV < 30%)
-Growth capped at 3%
-Discount rate = 9%
+Growth capped at 0-3% according to sector
+Discount rate floor = 9-11% according to sector
+DCF is disabled for Financial Services and REITs; sector-specific models are used instead
 ```
+
+The cash-flow input is an FCFE proxy (operating cash flow less capital expenditure),
+so net debt is not subtracted a second time. The output records this basis explicitly.
+
+### Sector-specific models
+
+- Banks and insurers use the lower of a tangible-book/normalized-return estimate and an
+  8x normalized-earnings cross-check. A common-equity/assets floor is only a preliminary
+  safety gate; CET1 or insurer risk-based capital must be checked in official filings.
+- REITs use a three-year lower-quartile FFO proxy, apply a 20% AFFO haircut, and use an
+  8x-10x multiple. Debt/EBITDA above 7x is excluded. Company-reported FFO/AFFO, recurring
+  capital expenditure, occupancy, and debt maturities still require manual verification.
+- Other financial companies use conservative normalized earnings without a DCF and carry
+  an explicit sector-risk verification warning.
+
+### Data and comparability safeguards
+
+- Cached records are schema-versioned; older records are automatically refetched.
+- The newest available annual or quarterly balance sheet supplies cash, debt, equity,
+  and shares, and records its reporting period and frequency.
+- EPS uses each period's diluted average shares when available instead of today's share count.
+- Material recent discontinued operations block ranking until a comparable history can be
+  rebuilt; immaterial presentation-only amounts do not stop the line.
+- Material unusual gains and isolated upside EPS spikes are excluded from normalization;
+  losses are retained.
+- Energy and Materials use lower-quartile rather than mean normalization, an 8× earnings cap,
+  an 11% discount floor, and zero perpetual growth to reduce cycle-peak false positives.
+- Ranked and excluded CSVs include provider, stable issuer key (SEC CIK when available),
+  source URL, fundamentals date, quality flags, valuation policy, DCF basis, sector model,
+  research entry price, alert status, and any filing verification still required.
 
 ### Final Intrinsic Value
 ```

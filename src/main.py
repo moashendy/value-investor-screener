@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from config import *
 from data_fetcher import StockDataFetcher
-from valuations import GrahamValuator, ValuationResult
+from valuations import GrahamValuator, ReasonCode, ValuationResult
 from screener import ValueScreener
 
 
@@ -20,7 +20,7 @@ def analyze_stocks(tickers: List[str],
                    valuator: GrahamValuator,
                    sector_pes: dict,
                    market_name: str,
-                   max_workers: int = 5) -> List[ValuationResult]:
+                   max_workers: int = 2) -> List[ValuationResult]:
     """
     Analyze a list of stocks and return valuations using concurrency
     """
@@ -69,7 +69,7 @@ def analyze_stocks(tickers: List[str],
             valuations.append(ValuationResult(
                 ticker=ticker,
                 company_name=ticker,
-                current_price=0,
+                current_price=None,
                 normalized_eps=None,
                 normalized_fcf=None,
                 years_of_data=0,
@@ -86,7 +86,8 @@ def analyze_stocks(tickers: List[str],
                 f_score=None,
                 wacc=None,
                 altman_z_score=None,
-                reasons_excluded=["Failed to fetch network data"]
+                reasons_excluded=["Failed to fetch network data"],
+                reason_codes=[ReasonCode.FETCH_FAILED.value]
             ))
             continue
             
@@ -106,7 +107,7 @@ def analyze_stocks(tickers: List[str],
             valuations.append(ValuationResult(
                 ticker=ticker,
                 company_name=ticker,
-                current_price=0,
+                current_price=None,
                 normalized_eps=None,
                 normalized_fcf=None,
                 years_of_data=0,
@@ -123,7 +124,8 @@ def analyze_stocks(tickers: List[str],
                 f_score=None,
                 wacc=None,
                 altman_z_score=None,
-                reasons_excluded=[f"Evaluation Error: {str(e)[:30]}"]
+                reasons_excluded=[f"Evaluation Error: {str(e)[:30]}"],
+                reason_codes=[ReasonCode.EVALUATION_ERROR.value]
             ))
             
     return valuations
@@ -147,6 +149,7 @@ def main(quick_mode: bool = False, sample_size: int = None):
     # Initialize components
     print("\n📊 Initializing components...")
     fetcher = StockDataFetcher(cache_dir=DATA_DIR)
+    fetcher.start_isolated_provider_session()
     valuator = GrahamValuator(
         discount_rate=DISCOUNT_RATE,
         max_growth=MAX_GROWTH_RATE,
@@ -170,12 +173,15 @@ def main(quick_mode: bool = False, sample_size: int = None):
     
     print(f"  • US stocks: {len(us_tickers)}")
     print(f"  • Canadian stocks: {len(ca_tickers)}")
+
+    print("\n🔎 Loading stable SEC issuer identities...")
+    sec_issuer_count = fetcher.load_sec_cik_map()
+    print(f"  • Loaded {sec_issuer_count} ticker-to-CIK identities")
     
-    # Calculate sector PE medians (for context)
-    print("\n📈 Calculating sector PE ratios...")
-    all_tickers = us_tickers + ca_tickers
-    sector_pes = fetcher.get_sector_pe_ratios(all_tickers)
-    print(f"  • Found PE data for {len(sector_pes)} sectors")
+    # A separate sector-median fetch doubled provider requests and caused full-run
+    # rate limits. Fixed, conservative sector policies remain the binding caps.
+    print("\n📈 Using fixed conservative sector valuation policies")
+    sector_pes = {}
     
     # Analyze US stocks
     us_valuations = analyze_stocks(
@@ -200,6 +206,7 @@ def main(quick_mode: bool = False, sample_size: int = None):
     print("GENERATING REPORTS")
     print("=" * 70)
     
+    screener.validate_run_integrity(us_valuations, ca_valuations)
     tables = screener.create_summary_tables(us_valuations, ca_valuations)
     
     # Print summary statistics
