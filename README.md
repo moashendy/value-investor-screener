@@ -259,6 +259,40 @@ MAX_DEBT_TO_EQUITY = 2.0     # Maximum leverage
 
 ## Advanced Usage
 
+### Point-in-time backtesting
+
+The live output is a current research watchlist, not evidence that the strategy
+has worked historically. The repository includes a backtest engine that only
+runs on explicit point-in-time snapshots:
+
+```bash
+python src/backtest.py \
+  --signals path/to/historical_signals.csv \
+  --prices path/to/adjusted_prices.csv \
+  --benchmark SPY \
+  --output outputs/backtest
+```
+
+The signal file must contain one full historical universe snapshot per rebalance
+date with these columns:
+
+- `signal_date`, `ticker`, `current_price`, `intrinsic_value`
+- `eligible`, `universe_member`
+- `fundamentals_available_date` — the date the inputs were publicly available,
+  not the fiscal period end
+
+The price file requires `date`, `ticker`, and `adjusted_close`, including the
+benchmark ticker when one is requested. Orders are simulated on the first
+trading session after each signal. Missing selected-stock prices, future-dated
+fundamentals, duplicate observations, and malformed inputs stop the run.
+
+Outputs include period returns, security-level holdings, CAGR, annualized
+rebalance-period volatility, drawdown observed at rebalance endpoints, turnover,
+transaction costs, hit rate, and benchmark-relative CAGR. Daily volatility and
+intra-period drawdown require a separate daily mark-to-market equity curve and
+are intentionally not inferred from sparse snapshots. No historical performance
+is claimed until a survivorship-bias-free, filing-date-aware dataset is supplied.
+
 ### Adding Your Own Stocks
 Edit `data_fetcher.py` and add tickers to the lists:
 
